@@ -18,12 +18,16 @@ class Store(object):
         with sqlite3.connect(self.DB) as db_connection:
             db_cursor = db_connection.cursor()
             db_cursor.execute(
-                ''' INSERT INTO maps (address, cert, dt) VALUES (?, ?, ?)''',
-                (str(ip_addr), cert, dt)
+                '''DELETE FROM maps WHERE dt < ?''',
+                (dt + dateutil.relativedelta.relativedelta(days=-1), )
             )
             db_cursor.execute(
-                ''' DELETE FROM maps WHERE dt < ?''',
-                (dt + dateutil.relativedelta.relativedelta(days=-1), )
+                '''DELETE FROM maps WHERE address = ? AND cert = ?''',
+                (str(ip_addr), cert)
+            )
+            db_cursor.execute(
+                '''INSERT INTO maps (address, cert, dt) VALUES (?, ?, ?)''',
+                (str(ip_addr), cert, dt)
             )
 
     def read(self):
