@@ -34,7 +34,7 @@ class Store(object):
         with sqlite3.connect(self.DB) as db_connection:
             db_cursor = db_connection.cursor()
             for row in db_cursor.execute('SELECT * FROM maps'):
-                yield str(row)
+                yield '%s\n' % str(row)
 
 
 _store = Store()
@@ -42,7 +42,7 @@ _store = Store()
 
 class Root(object):
     def _get(self):
-        cherrypy.response.headers['Content-Type'] = 'text/plain; encoding=utf-8'
+        cherrypy.response.headers['Content-Type'] = 'text/plain;encoding=utf-8'
         cherrypy.response.status = '200 OK'
         return _store.read()
 
@@ -55,7 +55,7 @@ class Root(object):
         _store.hit(real_ip, ', '.join([subj_item.value for subj_item in client_crt.subject]))
         cherrypy.response.headers['Content-Type'] = 'text/plain; encoding=utf-8'
         cherrypy.response.status = '202 Accepted'
-        yield 'Your IP: %s\nYour certificate: %s' % (
+        yield 'Your IP: %s\nYour certificate: %s\n' % (
             real_ip, ', '.join([subj_item.value for subj_item in client_crt.subject])
         )
 
