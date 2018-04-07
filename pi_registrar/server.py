@@ -33,7 +33,7 @@ class Store(object):
     def read(self):
         with sqlite3.connect(self.DB) as db_connection:
             db_cursor = db_connection.cursor()
-            for row in db_cursor.execute('SELECT * FROM maps'):
+            for row in db_cursor.execute('SELECT * FROM maps ORDER BY dt DESC'):
                 yield '%s\n' % str(row)
 
 
