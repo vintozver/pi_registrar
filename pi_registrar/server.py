@@ -22,19 +22,19 @@ class Store(object):
                 (dt + dateutil.relativedelta.relativedelta(days=-1), )
             )
             db_cursor.execute(
-                '''DELETE FROM maps WHERE address = ? AND cert = ?''',
-                (str(ip_addr), cert)
+                '''DELETE FROM maps WHERE ver = ? AND cert = ?''',
+                (ip_addr.version, cert)
             )
             db_cursor.execute(
-                '''INSERT INTO maps (address, cert, dt) VALUES (?, ?, ?)''',
-                (str(ip_addr), cert, dt)
+                '''INSERT INTO maps (ver, cert, address, dt) VALUES (?, ?, ?)''',
+                (ip_addr.version, cert, str(ip_addr), dt)
             )
 
     def read(self):
         with sqlite3.connect(self.DB) as db_connection:
             db_cursor = db_connection.cursor()
-            for row in db_cursor.execute('SELECT * FROM maps ORDER BY dt DESC'):
-                yield '%s\n' % str(row)
+            for row in db_cursor.execute('SELECT ver, cert, address, dt FROM maps ORDER BY dt DESC'):
+                yield str(row[0]), str(row[1]), str(row[2]), str(row[3])
 
 
 _store = Store()
@@ -42,8 +42,17 @@ _store = Store()
 
 class Root(object):
     def _get(self):
-        cherrypy.response.headers['Content-Type'] = 'text/plain;encoding=utf-8'
+        cherrypy.response.headers['Content-Type'] = 'text/html; encoding=utf-8'
         cherrypy.response.status = '200 OK'
+        yield '<html>\n'
+        yield '<body>\n'
+        yield '<table>\n'
+        yield '<tr><th>V</th><th>certificate</th><th>IP address</th><th>updated</th></tr>\n'
+        for item in _store.read():
+            yield '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n' % item
+        yield '</table>\n'
+        yield '</body>\n'
+        yield '</html>\n'
         return _store.read()
 
     def _post(self):
@@ -78,7 +87,7 @@ with sqlite3.connect(Store.DB) as db_connection:
     try:
         db_cursor.execute(
             '''
-CREATE TABLE maps (address VARCHAR, cert TEXT, dt DATETIME, PRIMARY KEY (address, cert))
+CREATE TABLE maps (ver VARCHAR, cert VARCHAR, address VARCHAR, dt DATETIME, PRIMARY KEY (ver, cert))
 '''
         )
     except sqlite3.OperationalError as err:
