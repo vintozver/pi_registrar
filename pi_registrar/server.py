@@ -26,7 +26,7 @@ class Store(object):
                 (ip_addr.version, cert)
             )
             db_cursor.execute(
-                '''INSERT INTO maps (ver, cert, address, dt) VALUES (?, ?, ?)''',
+                '''INSERT INTO maps (ver, cert, address, dt) VALUES (?, ?, ?, ?)''',
                 (ip_addr.version, cert, str(ip_addr), dt)
             )
 
