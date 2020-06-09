@@ -45,6 +45,11 @@ class Root(object):
         cherrypy.response.headers['Content-Type'] = 'text/html; encoding=utf-8'
         cherrypy.response.status = '200 OK'
         yield '<html>\n'
+        yield '''<style>
+table, th, td {
+    border: 1px solid grey;
+}
+</style>'''
         yield '<body>\n'
         yield '<table>\n'
         yield '<tr><th>V</th><th>certificate</th><th>IP address</th><th>updated</th></tr>\n'
