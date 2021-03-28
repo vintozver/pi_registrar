@@ -14,7 +14,7 @@ Server receives the updates and consolidates them, also displays them. \
     url='https://www.python.org/sigs/distutils-sig/',
     packages=['pi_registrar'],
     install_requires=[
-        'cherrypy', 'jinja2', 'gunicorn', 'pyasn1', 'cryptography',
+        'cherrypy', 'jinja2', 'gunicorn', 'pyasn1', 'cryptography', 'dnspython',
     ],
     entry_points={
         'console_scripts': [

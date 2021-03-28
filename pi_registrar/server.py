@@ -5,15 +5,78 @@ import http
 import datetime
 import dateutil.relativedelta
 import cryptography.x509
+import cryptography.x509.oid
 import cryptography.hazmat.backends
 import sqlite3
+import configparser
+import dns.tsig
+import dns.tsigkeyring
+import dns.resolver
+import dns.rcode
+import dns.query
+import dns.update
+import logging
 
 
 class Store(object):
+    CONFIG = 'config.txt'
     DB = 'hostreg.db'
+
+    def __init__(self):
+        cfg = configparser.ConfigParser()
+        try:
+            cfg.read_file(open(self.CONFIG, 'rt'))
+        except configparser.Error as err:
+            logging.warn('Config read failed: %s' % err)
+
+        self.dns_zone = None
+        self.dns_ttl = 0
+        self.dns_keyring = None
+
+        if cfg.has_section('dns'):
+            cfg_dns = cfg['dns']
+
+            self.dns_zone = cfg_dns['zone']
+            self.dns_ttl = int(cfg_dns['ttl'])
+
+            dnskey_name = cfg_dns['key_name']
+            dnskey_alg = cfg_dns['key_alg']
+            dnskey_secret = cfg_dns['key_secret']
+
+            self.dns_keyring = dns.tsigkeyring.from_text({dnskey_name: (dnskey_alg, dnskey_secret)})
+        else:
+            logging.warn('Config contains no "dns" section; skipped DNS update functionality')
 
     def hit(self, ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], cert: str):
         dt = datetime.datetime.utcnow()
+
+        if self.dns_zone is not None and self.dns_ttl > 0 and self.dns_keyring is not None:
+            soa_server = None  # DNS SOA server name - to send updates to
+            dns_answer = dns.resolver.resolve(self.dns_zone, 'SOA')
+            if dns_answer.response.rcode() == dns.rcode.NOERROR:
+                if len(dns_answer.response.answer) >= 1:
+                    dns_answer_rrset = dns_answer.response.answer[0]
+                    if len(dns_answer_rrset) >= 1:
+                        soa_server = str(dns_answer_rrset[0].mname)
+
+            soa_server_ip = None  # DNS SOA server IP - to send updates to
+            if soa_server is not None:
+                dns_answer = dns.resolver.resolve(soa_server, 'AAAA')
+                if dns_answer.response.rcode() == dns.rcode.NOERROR:
+                    if len(dns_answer.response.answer) >= 1:
+                        dns_answer_rrset = dns_answer.response.answer[0]
+                        if len(dns_answer_rrset) >= 1:
+                            soa_server_ip = ipaddress.IPv6Address(dns_answer_rrset[0].to_text())
+
+            if soa_server_ip is not None:
+                dns_update = dns.update.Update(self.dns_zone, keyring=self.dns_keyring)
+                if ip_addr.version == 4:
+                    dns_update.replace(cert, self.dns_ttl, 'A', str(ip_addr))
+                elif ip_addr.version == 6:
+                    dns_update.replace(cert, self.dns_ttl, 'AAAA', str(ip_addr))
+                else:
+                    pass
+                response = dns.query.tcp(dns_update, str(soa_server_ip), timeout=5)
 
         with sqlite3.connect(self.DB) as db_connection:
             db_cursor = db_connection.cursor()
@@ -66,12 +129,11 @@ table, th, td {
             cherrypy.request.headers['X-SSL-Client-Certificate'].encode('ascii'),
             cryptography.hazmat.backends.default_backend()
         )
-        _store.hit(real_ip, ', '.join([subj_item.value for subj_item in client_crt.subject]))
+        client_crt_cn = client_crt.subject.get_attributes_for_oid(cryptography.x509.oid.NameOID.COMMON_NAME)[0].value
+        _store.hit(real_ip, client_crt_cn)
         cherrypy.response.headers['Content-Type'] = 'text/plain; encoding=utf-8'
         cherrypy.response.status = '202 Accepted'
-        yield 'Your IP: %s\nYour certificate: %s\n' % (
-            real_ip, ', '.join([subj_item.value for subj_item in client_crt.subject])
-        )
+        yield 'Your IP: %s\nYour certificate: %s\n' % (real_ip, client_crt_cn)
 
     @cherrypy.expose
     def index(self):
