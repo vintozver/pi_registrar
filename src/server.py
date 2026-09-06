@@ -9,7 +9,9 @@ import typing
 
 import cherrypy
 import cryptography.hazmat.backends
+import cryptography.exceptions
 import cryptography.hazmat.primitives.asymmetric.ec
+import cryptography.hazmat.primitives.asymmetric.rsa
 import cryptography.hazmat.primitives.asymmetric.padding
 import cryptography.x509
 import cryptography.x509.oid
@@ -103,22 +105,29 @@ def _verify_certificate(certificate, known_ca):
         return False
     if certificate.issuer != known_ca.subject:
         return False
+    public_key = known_ca.public_key()
     try:
-        known_ca.public_key().verify(
-            certificate.signature,
-            certificate.tbs_certificate_bytes,
-            cryptography.hazmat.primitives.asymmetric.padding.PKCS1v15(),
-            certificate.signature_hash_algorithm,
-        )
-    except Exception:
-        try:
-            known_ca.public_key().verify(
+        if isinstance(public_key, cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey):
+            public_key.verify(
+                certificate.signature,
+                certificate.tbs_certificate_bytes,
+                cryptography.hazmat.primitives.asymmetric.padding.PKCS1v15(),
+                certificate.signature_hash_algorithm,
+            )
+        elif isinstance(public_key, cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey):
+            public_key.verify(
                 certificate.signature,
                 certificate.tbs_certificate_bytes,
                 cryptography.hazmat.primitives.asymmetric.ec.ECDSA(certificate.signature_hash_algorithm),
             )
-        except Exception:
+        else:
             return False
+    except (
+        cryptography.exceptions.InvalidSignature,
+        TypeError,
+        ValueError,
+    ):
+        return False
     return True
 
 
@@ -150,9 +159,11 @@ class Root:
             certificate = _certificate_from_x5c(header["x5c"][0])
             if not _verify_certificate(certificate, _store.known_ca):
                 raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Certificate is not trusted")
-            payload = jwt.decode(token, certificate.public_key(), algorithms=[header["alg"]])
-            real_ip = ipaddress.ip_address(payload["ip"])
-            client_crt_cn = str(payload["certificate"])
+            jwt.decode(token, certificate.public_key(), algorithms=[header["alg"]])
+            real_ip = ipaddress.ip_address(cherrypy.request.remote.ip)
+            client_crt_cn = certificate.subject.get_attributes_for_oid(
+                cryptography.x509.oid.NameOID.COMMON_NAME
+            )[0].value
         except cherrypy.HTTPError:
             raise
         except (KeyError, ValueError, jwt.PyJWTError):
