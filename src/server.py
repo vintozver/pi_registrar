@@ -26,8 +26,7 @@ import yaml
 
 
 class Store:
-    DB = os.environ.get("PI_REGISTRAR_DB", "hostreg.db")
-    CONFIG = os.environ.get("PI_REGISTRAR_CONFIG", "config.yaml")
+    CONFIG_FILE = os.environ.get("PI_REGISTRAR_CONFIG", "config.yaml")
 
     def __init__(self):
         self.dns_zone = None
@@ -35,11 +34,12 @@ class Store:
         self.dns_keyring = None
         self.known_ca = None
         try:
-            with open(self.CONFIG, "rt", encoding="utf-8") as config_file:
+            with open(self.CONFIG_FILE, "rt", encoding="utf-8") as config_file:
                 config = yaml.safe_load(config_file) or {}
         except (OSError, yaml.YAMLError) as err:
             logging.warning("Config read failed: %s", err)
             config = {}
+        self.db = config.get("database", "hostreg.db")
 
         known_ca = config.get("known_ca")
         if known_ca:
@@ -71,17 +71,17 @@ class Store:
                     update.replace(cert, self.dns_ttl, record_type, str(ip_addr))
                     dns.query.tcp(update, str(addresses[0]), timeout=5)
 
-        with sqlite3.connect(self.DB) as db_connection:
+        with sqlite3.connect(self.db) as db_connection:
             cursor = db_connection.cursor()
             cursor.execute("DELETE FROM maps WHERE dt < ?", (dt + dateutil.relativedelta.relativedelta(days=-1),))
-            cursor.execute("DELETE FROM maps WHERE ver = ? AND cert = ?", (ip_addr.version, cert))
             cursor.execute(
-                "INSERT INTO maps (ver, cert, address, dt) VALUES (?, ?, ?, ?)",
+                """INSERT INTO maps (ver, cert, address, dt) VALUES (?, ?, ?, ?)
+                   ON CONFLICT(ver, cert) DO UPDATE SET address=excluded.address, dt=excluded.dt""",
                 (ip_addr.version, cert, str(ip_addr), dt),
             )
 
     def read(self):
-        with sqlite3.connect(self.DB) as db_connection:
+        with sqlite3.connect(self.db) as db_connection:
             for row in db_connection.execute("SELECT ver, cert, address, dt FROM maps ORDER BY dt DESC"):
                 yield tuple(map(str, row))
 
@@ -149,6 +149,10 @@ class Root:
         cherrypy.response.status = "202 Accepted"
         return "Your IP: %s\nYour certificate: %s\n" % (real_ip, client_crt_cn)
 
+    @staticmethod
+    def _request_ip():
+        return ipaddress.ip_address(cherrypy.request.headers["X-Real-IP"])
+
     def _post(self):
         authorization = cherrypy.request.headers.get("Authorization", "")
         if not authorization.startswith("Bearer "):
@@ -160,7 +164,7 @@ class Root:
             if not _verify_certificate(certificate, _store.known_ca):
                 raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Certificate is not trusted")
             jwt.decode(token, certificate.public_key(), algorithms=[header["alg"]])
-            real_ip = ipaddress.ip_address(cherrypy.request.remote.ip)
+            real_ip = self._request_ip()
             client_crt_cn = certificate.subject.get_attributes_for_oid(
                 cryptography.x509.oid.NameOID.COMMON_NAME
             )[0].value
@@ -174,7 +178,7 @@ class Root:
     def index(self):
         if cherrypy.request.method == "MAP":
             return self._map(
-                ipaddress.ip_address(cherrypy.request.headers["X-Real-IP"]),
+                self._request_ip(),
                 cryptography.x509.load_pem_x509_certificate(
                     cherrypy.request.headers["X-SSL-Client-Certificate"].encode("ascii"),
                     cryptography.hazmat.backends.default_backend(),
@@ -189,7 +193,7 @@ class Root:
 
 def run():
     global _store
-    with sqlite3.connect(Store.DB) as db_connection:
+    with sqlite3.connect(_store.db) as db_connection:
         db_connection.execute(
             "CREATE TABLE IF NOT EXISTS maps (ver VARCHAR, cert VARCHAR, address VARCHAR, dt DATETIME, PRIMARY KEY (ver, cert))"
         )

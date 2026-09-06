@@ -2,8 +2,9 @@
 Description=periodic pi registrar client update
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=15min
+OnBootSec=1min
+OnCalendar=*-*-* *:00:00
+AccuracySec=1us
 Unit=pi-registrar-client.service
 
 [Install]
