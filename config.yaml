@@ -1,0 +1,13 @@
+# The PEM certificate of the CA that signs client certificates.
+known_ca: |
+  -----BEGIN CERTIFICATE-----
+  REPLACE_WITH_CA_CERTIFICATE
+  -----END CERTIFICATE-----
+
+# Optional dynamic DNS settings.
+# dns:
+#   zone: example.org
+#   ttl: 300
+#   key_name: registrar
+#   key_alg: hmac-sha256
+#   key_secret: replace-me

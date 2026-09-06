@@ -1,169 +1,182 @@
-import typing
-import ipaddress
-import cherrypy
-import http
+import base64
 import datetime
-import dateutil.relativedelta
+import http
+import ipaddress
+import logging
+import os
+import sqlite3
+import typing
+
+import cherrypy
+import cryptography.hazmat.backends
+import cryptography.hazmat.primitives.asymmetric.ec
+import cryptography.hazmat.primitives.asymmetric.padding
 import cryptography.x509
 import cryptography.x509.oid
-import cryptography.hazmat.backends
-import sqlite3
-import configparser
-import dns.tsig
-import dns.tsigkeyring
-import dns.resolver
-import dns.rcode
+import dateutil.relativedelta
 import dns.query
+import dns.rcode
+import dns.resolver
+import dns.tsigkeyring
 import dns.update
-import logging
+import jwt
+import yaml
 
 
-class Store(object):
-    CONFIG = 'config.txt'
-    DB = 'hostreg.db'
+class Store:
+    DB = os.environ.get("PI_REGISTRAR_DB", "hostreg.db")
+    CONFIG = os.environ.get("PI_REGISTRAR_CONFIG", "config.yaml")
 
     def __init__(self):
-        cfg = configparser.ConfigParser()
-        try:
-            cfg.read_file(open(self.CONFIG, 'rt'))
-        except configparser.Error as err:
-            logging.warn('Config read failed: %s' % err)
-
         self.dns_zone = None
         self.dns_ttl = 0
         self.dns_keyring = None
+        self.known_ca = None
+        try:
+            with open(self.CONFIG, "rt", encoding="utf-8") as config_file:
+                config = yaml.safe_load(config_file) or {}
+        except (OSError, yaml.YAMLError) as err:
+            logging.warning("Config read failed: %s", err)
+            config = {}
 
-        if cfg.has_section('dns'):
-            cfg_dns = cfg['dns']
-
-            self.dns_zone = cfg_dns['zone']
-            self.dns_ttl = int(cfg_dns['ttl'])
-
-            dnskey_name = cfg_dns['key_name']
-            dnskey_alg = cfg_dns['key_alg']
-            dnskey_secret = cfg_dns['key_secret']
-
-            self.dns_keyring = dns.tsigkeyring.from_text({dnskey_name: (dnskey_alg, dnskey_secret)})
-        else:
-            logging.warn('Config contains no "dns" section; skipped DNS update functionality')
+        known_ca = config.get("known_ca")
+        if known_ca:
+            self.known_ca = cryptography.x509.load_pem_x509_certificate(
+                known_ca.encode("ascii"), cryptography.hazmat.backends.default_backend()
+            )
+        cfg_dns = config.get("dns", {})
+        if cfg_dns:
+            self.dns_zone = cfg_dns["zone"]
+            self.dns_ttl = int(cfg_dns["ttl"])
+            self.dns_keyring = dns.tsigkeyring.from_text(
+                {cfg_dns["key_name"]: (cfg_dns["key_alg"], cfg_dns["key_secret"])}
+            )
 
     def hit(self, ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], cert: str):
         dt = datetime.datetime.utcnow()
-
-        if self.dns_zone is not None and self.dns_ttl > 0 and self.dns_keyring is not None:
-            soa_server = None  # DNS SOA server name - to send updates to
-            dns_answer = dns.resolver.resolve(self.dns_zone, 'SOA')
-            if dns_answer.response.rcode() == dns.rcode.NOERROR:
-                if len(dns_answer.response.answer) >= 1:
-                    dns_answer_rrset = dns_answer.response.answer[0]
-                    if len(dns_answer_rrset) >= 1:
-                        soa_server = str(dns_answer_rrset[0].mname)
-
-            soa_server_ip = None  # DNS SOA server IP - to send updates to
-            if soa_server is not None:
-                dns_answer = dns.resolver.resolve(soa_server, 'AAAA')
-                if dns_answer.response.rcode() == dns.rcode.NOERROR:
-                    if len(dns_answer.response.answer) >= 1:
-                        dns_answer_rrset = dns_answer.response.answer[0]
-                        if len(dns_answer_rrset) >= 1:
-                            soa_server_ip = ipaddress.IPv6Address(dns_answer_rrset[0].to_text())
-
-            if soa_server_ip is not None:
-                dns_update = dns.update.Update(self.dns_zone, keyring=self.dns_keyring)
-                if ip_addr.version == 4:
-                    dns_update.replace(cert, self.dns_ttl, 'A', str(ip_addr))
-                elif ip_addr.version == 6:
-                    dns_update.replace(cert, self.dns_ttl, 'AAAA', str(ip_addr))
-                else:
-                    pass
-                response = dns.query.tcp(dns_update, str(soa_server_ip), timeout=5)
+        if self.dns_zone and self.dns_ttl > 0 and self.dns_keyring:
+            soa = dns.resolver.resolve(self.dns_zone, "SOA")
+            soa_server = str(soa[0].mname) if soa else None
+            if soa_server:
+                addresses = dns.resolver.resolve(soa_server, "AAAA")
+                if addresses:
+                    update = dns.update.Update(self.dns_zone, keyring=self.dns_keyring)
+                    record_type = "A" if ip_addr.version == 4 else "AAAA"
+                    update.replace(cert, self.dns_ttl, record_type, str(ip_addr))
+                    dns.query.tcp(update, str(addresses[0]), timeout=5)
 
         with sqlite3.connect(self.DB) as db_connection:
-            db_cursor = db_connection.cursor()
-            db_cursor.execute(
-                '''DELETE FROM maps WHERE dt < ?''',
-                (dt + dateutil.relativedelta.relativedelta(days=-1), )
-            )
-            db_cursor.execute(
-                '''DELETE FROM maps WHERE ver = ? AND cert = ?''',
-                (ip_addr.version, cert)
-            )
-            db_cursor.execute(
-                '''INSERT INTO maps (ver, cert, address, dt) VALUES (?, ?, ?, ?)''',
-                (ip_addr.version, cert, str(ip_addr), dt)
+            cursor = db_connection.cursor()
+            cursor.execute("DELETE FROM maps WHERE dt < ?", (dt + dateutil.relativedelta.relativedelta(days=-1),))
+            cursor.execute("DELETE FROM maps WHERE ver = ? AND cert = ?", (ip_addr.version, cert))
+            cursor.execute(
+                "INSERT INTO maps (ver, cert, address, dt) VALUES (?, ?, ?, ?)",
+                (ip_addr.version, cert, str(ip_addr), dt),
             )
 
     def read(self):
         with sqlite3.connect(self.DB) as db_connection:
-            db_cursor = db_connection.cursor()
-            for row in db_cursor.execute('SELECT ver, cert, address, dt FROM maps ORDER BY dt DESC'):
-                yield str(row[0]), str(row[1]), str(row[2]), str(row[3])
+            for row in db_connection.execute("SELECT ver, cert, address, dt FROM maps ORDER BY dt DESC"):
+                yield tuple(map(str, row))
+
+
+def _certificate_from_x5c(value: str):
+    try:
+        return cryptography.x509.load_der_x509_certificate(
+            base64.b64decode(value), cryptography.hazmat.backends.default_backend()
+        )
+    except (ValueError, TypeError):
+        raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Invalid certificate")
+
+
+def _verify_certificate(certificate, known_ca):
+    if known_ca is None:
+        return False
+    if certificate.issuer != known_ca.subject:
+        return False
+    try:
+        known_ca.public_key().verify(
+            certificate.signature,
+            certificate.tbs_certificate_bytes,
+            cryptography.hazmat.primitives.asymmetric.padding.PKCS1v15(),
+            certificate.signature_hash_algorithm,
+        )
+    except Exception:
+        try:
+            known_ca.public_key().verify(
+                certificate.signature,
+                certificate.tbs_certificate_bytes,
+                cryptography.hazmat.primitives.asymmetric.ec.ECDSA(certificate.signature_hash_algorithm),
+            )
+        except Exception:
+            return False
+    return True
 
 
 _store = Store()
 
 
-class Root(object):
+class Root:
     def _get(self):
-        cherrypy.response.headers['Content-Type'] = 'text/html; encoding=utf-8'
-        cherrypy.response.status = '200 OK'
-        yield '<html>\n'
-        yield '''<style>
-table, th, td {
-    border: 1px solid grey;
-}
-</style>'''
-        yield '<body>\n'
-        yield '<table>\n'
-        yield '<tr><th>V</th><th>certificate</th><th>IP address</th><th>updated</th></tr>\n'
-        for item in _store.read():
-            yield '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>\n' % item
-        yield '</table>\n'
-        yield '</body>\n'
-        yield '</html>\n'
-        return _store.read()
+        cherrypy.response.headers["Content-Type"] = "text/html; charset=utf-8"
+        cherrypy.response.status = "200 OK"
+        rows = ["<html><body><table>", "<tr><th>V</th><th>certificate</th><th>IP address</th><th>updated</th></tr>"]
+        rows.extend("<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % item for item in _store.read())
+        rows.append("</table></body></html>")
+        return "\n".join(rows)
+
+    def _map(self, real_ip, client_crt_cn):
+        _store.hit(real_ip, client_crt_cn)
+        cherrypy.response.headers["Content-Type"] = "text/plain; charset=utf-8"
+        cherrypy.response.status = "202 Accepted"
+        return "Your IP: %s\nYour certificate: %s\n" % (real_ip, client_crt_cn)
 
     def _post(self):
-        real_ip = ipaddress.ip_address(cherrypy.request.headers['X-Real-IP'])
-        client_crt = cryptography.x509.load_pem_x509_certificate(
-            cherrypy.request.headers['X-SSL-Client-Certificate'].encode('ascii'),
-            cryptography.hazmat.backends.default_backend()
-        )
-        client_crt_cn = client_crt.subject.get_attributes_for_oid(cryptography.x509.oid.NameOID.COMMON_NAME)[0].value
-        _store.hit(real_ip, client_crt_cn)
-        cherrypy.response.headers['Content-Type'] = 'text/plain; encoding=utf-8'
-        cherrypy.response.status = '202 Accepted'
-        yield 'Your IP: %s\nYour certificate: %s\n' % (real_ip, client_crt_cn)
+        authorization = cherrypy.request.headers.get("Authorization", "")
+        if not authorization.startswith("Bearer "):
+            raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Authorization header required")
+        token = authorization[7:]
+        try:
+            header = jwt.get_unverified_header(token)
+            certificate = _certificate_from_x5c(header["x5c"][0])
+            if not _verify_certificate(certificate, _store.known_ca):
+                raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Certificate is not trusted")
+            payload = jwt.decode(token, certificate.public_key(), algorithms=[header["alg"]])
+            real_ip = ipaddress.ip_address(payload["ip"])
+            client_crt_cn = str(payload["certificate"])
+        except cherrypy.HTTPError:
+            raise
+        except (KeyError, ValueError, jwt.PyJWTError):
+            raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Invalid JWT")
+        return self._map(real_ip, client_crt_cn)
 
     @cherrypy.expose
     def index(self):
-        method = cherrypy.request.method
-        if method == 'MAP':
-            return self._post()
-        elif method == 'GET':
-            return self._get()
-        else:
-            raise cherrypy.HTTPError(
-                http.HTTPStatus.METHOD_NOT_ALLOWED.value, http.HTTPStatus.METHOD_NOT_ALLOWED.phrase
+        if cherrypy.request.method == "MAP":
+            return self._map(
+                ipaddress.ip_address(cherrypy.request.headers["X-Real-IP"]),
+                cryptography.x509.load_pem_x509_certificate(
+                    cherrypy.request.headers["X-SSL-Client-Certificate"].encode("ascii"),
+                    cryptography.hazmat.backends.default_backend(),
+                ).subject.get_attributes_for_oid(cryptography.x509.oid.NameOID.COMMON_NAME)[0].value,
             )
-    _post.index = {'response.stream': True}
+        if cherrypy.request.method == "POST":
+            return self._post()
+        if cherrypy.request.method == "GET":
+            return self._get()
+        raise cherrypy.HTTPError(http.HTTPStatus.METHOD_NOT_ALLOWED.value, http.HTTPStatus.METHOD_NOT_ALLOWED.phrase)
 
 
-with sqlite3.connect(Store.DB) as db_connection:
-    db_cursor = db_connection.cursor()
-    try:
-        db_cursor.execute(
-            '''
-CREATE TABLE maps (ver VARCHAR, cert VARCHAR, address VARCHAR, dt DATETIME, PRIMARY KEY (ver, cert))
-'''
+def run():
+    global _store
+    with sqlite3.connect(Store.DB) as db_connection:
+        db_connection.execute(
+            "CREATE TABLE IF NOT EXISTS maps (ver VARCHAR, cert VARCHAR, address VARCHAR, dt DATETIME, PRIMARY KEY (ver, cert))"
         )
-    except sqlite3.OperationalError as err:
-        print(err)
-
-
-cherrypy.config.update({'engine.autoreload.on': False})
-cherrypy.server.unsubscribe()
-cherrypy.engine.start()
+    cherrypy.config.update({"engine.autoreload.on": False})
+    cherrypy.tree.mount(Root())
+    cherrypy.engine.start()
+    cherrypy.engine.block()
 
 
 wsgiapp = cherrypy.tree.mount(Root())

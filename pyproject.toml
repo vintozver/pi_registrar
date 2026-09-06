@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pi_registrar"
+version = "1.0.0"
+description = "Registrar server and client for dynamic host addresses"
+requires-python = ">=3.8"
+dependencies = [
+    "cherrypy",
+    "cryptography",
+    "dnspython",
+    "PyJWT",
+    "PyYAML",
+    "python-dateutil",
+]
+
+[project.scripts]
+pi_registrar_server = "pi_registrar.server:run"
+pi_registrar_client = "pi_registrar.client:run"
+
+[tool.setuptools.packages.find]
+where = ["src"]
