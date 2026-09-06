@@ -51,8 +51,9 @@ class Store:
         if cfg_dns:
             self.dns_zone = cfg_dns["zone"]
             self.dns_ttl = int(cfg_dns["ttl"])
+            dns_key = cfg_dns.get("key", cfg_dns)
             self.dns_keyring = dns.tsigkeyring.from_text(
-                {cfg_dns["key_name"]: (cfg_dns["key_alg"], cfg_dns["key_secret"])}
+                {dns_key["name"]: (dns_key["alg"], dns_key["secret"])}
             )
 
     def hit(self, ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], cert: str):

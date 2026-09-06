@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+install -d -m 0750 /etc/pi-registrar/client
+exit 0

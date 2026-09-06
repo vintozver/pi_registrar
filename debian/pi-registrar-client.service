@@ -1,0 +1,7 @@
+[Unit]
+Description=pi registrar client update
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/pi-registrar/client/client.conf
+ExecStart=/usr/bin/pi_registrar_client --endpoint ${ENDPOINT} --certificate ${CERTIFICATE} ${CLIENT_ARGS}

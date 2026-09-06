@@ -1,0 +1,10 @@
+[Unit]
+Description=periodic pi registrar client update
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Unit=pi-registrar-client.service
+
+[Install]
+WantedBy=timers.target

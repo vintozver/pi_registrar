@@ -1,2 +1,3 @@
 usr/bin/pi_registrar_server
-usr/lib/python3/dist-packages/pi_registrar/server.py
+usr/lib/python3/dist-packages/server.py
+debian/pi-registrar-server.service lib/systemd/system/
