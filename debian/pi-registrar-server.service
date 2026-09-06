@@ -6,8 +6,7 @@ Wants=network-online.target
 [Service]
 User=pi-registrar
 Group=pi-registrar
-Environment=PI_REGISTRAR_CONFIG=/etc/pi-registrar/server/config.yaml
-Environment=PI_REGISTRAR_DB=/var/lib/pi-registrar/hostreg.db
+Environment=CONFIG_FILE=/etc/pi-registrar/server/config.yaml
 ExecStart=/usr/bin/pi_registrar_server
 Restart=on-failure
 

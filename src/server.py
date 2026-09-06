@@ -26,7 +26,7 @@ import yaml
 
 
 class Store:
-    CONFIG_FILE = os.environ.get("PI_REGISTRAR_CONFIG", "config.yaml")
+    CONFIG_FILE = os.environ.get("CONFIG_FILE", "config.yaml")
 
     def __init__(self):
         self.dns_zone = None
