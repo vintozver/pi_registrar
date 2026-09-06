@@ -49,6 +49,13 @@ def _make_token(certificate_path, ip):
     return token
 
 
+def _local_address(host, port, family):
+    address = socket.getaddrinfo(host, port, family, socket.SOCK_DGRAM)[0][4]
+    with socket.socket(family, socket.SOCK_DGRAM) as connection:
+        connection.connect(address)
+        return connection.getsockname()[0]
+
+
 def run(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--endpoint", required=True)
@@ -59,7 +66,7 @@ def run(argv=None):
     endpoint = _resolve(args.endpoint, args.ipv4)
     parsed = urllib.parse.urlparse(endpoint)
     family = socket.AF_INET if args.ipv4 else socket.AF_INET6
-    local_ip = socket.getaddrinfo(parsed.hostname, parsed.port, family, socket.SOCK_STREAM)[0][4][0]
+    local_ip = _local_address(parsed.hostname, parsed.port, family)
     token = _make_token(args.certificate, ipaddress.ip_address(local_ip))
     request = urllib.request.Request(
         endpoint, method="POST", headers={"Authorization": "Bearer " + token}

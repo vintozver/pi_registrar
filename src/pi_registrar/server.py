@@ -41,9 +41,12 @@ class Store:
 
         known_ca = config.get("known_ca")
         if known_ca:
-            self.known_ca = cryptography.x509.load_pem_x509_certificate(
-                known_ca.encode("ascii"), cryptography.hazmat.backends.default_backend()
-            )
+            try:
+                self.known_ca = cryptography.x509.load_pem_x509_certificate(
+                    known_ca.encode("ascii"), cryptography.hazmat.backends.default_backend()
+                )
+            except ValueError:
+                logging.warning("known_ca is not a valid PEM certificate")
         cfg_dns = config.get("dns", {})
         if cfg_dns:
             self.dns_zone = cfg_dns["zone"]
@@ -91,6 +94,11 @@ def _certificate_from_x5c(value: str):
 
 def _verify_certificate(certificate, known_ca):
     if known_ca is None:
+        return False
+    now = datetime.datetime.now(datetime.timezone.utc)
+    valid_from = certificate.not_valid_before.replace(tzinfo=datetime.timezone.utc)
+    valid_until = certificate.not_valid_after.replace(tzinfo=datetime.timezone.utc)
+    if not (valid_from <= now <= valid_until):
         return False
     if certificate.issuer != known_ca.subject:
         return False
