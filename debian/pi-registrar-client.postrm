@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+if [ "$1" = purge ]; then
+    rm -rf /etc/pi-registrar/client
+fi
+exit 0

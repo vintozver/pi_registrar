@@ -59,7 +59,7 @@ class Store:
             )
 
     def hit(self, ip_addr: typing.Union[ipaddress.IPv4Address, ipaddress.IPv6Address], cert: str):
-        dt = datetime.datetime.utcnow()
+        dt = datetime.datetime.now(datetime.timezone.utc)
         if self.dns_zone and self.dns_ttl > 0 and self.dns_keyring:
             soa = dns.resolver.resolve(self.dns_zone, "SOA")
             soa_server = str(soa[0].mname) if soa else None
