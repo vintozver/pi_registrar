@@ -18,7 +18,7 @@ dependencies = [
 
 [project.scripts]
 pi_registrar_server = "server:run"
-pi_registrar_client = "client:run"
+pi_registrar_client = "client:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

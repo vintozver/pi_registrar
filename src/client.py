@@ -85,3 +85,11 @@ def run(argv=None):
     opener = urllib.request.build_opener(_HTTPSHandler(address, context))
     with opener.open(request) as response:
         return response.read().decode()
+
+
+def main():
+    print(run())
+
+
+if __name__ == "__main__":
+    main()
