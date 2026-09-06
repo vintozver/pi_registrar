@@ -2,5 +2,9 @@
 set -e
 if [ "$1" = purge ]; then
     rm -rf /etc/pi-registrar/server /var/lib/pi-registrar
+    if ! dpkg-query -W -f='${Status}' pi-registrar-client 2>/dev/null | grep -q 'ok installed'; then
+        deluser --system pi-registrar >/dev/null 2>&1 || true
+        delgroup --system pi-registrar >/dev/null 2>&1 || true
+    fi
 fi
 exit 0
