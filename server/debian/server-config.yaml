@@ -1,0 +1,12 @@
+known_ca: |
+  -----BEGIN CERTIFICATE-----
+  REPLACE_WITH_CA_CERTIFICATE
+  -----END CERTIFICATE-----
+database: /var/lib/pi-registrar/hostreg.db
+dns:
+  zone: example.org
+  ttl: 300
+  key:
+    name: registrar
+    alg: hmac-sha256
+    secret: replace-me

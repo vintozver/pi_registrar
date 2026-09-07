@@ -28,7 +28,7 @@ by default. Enable it with `systemctl enable --now pi-registrar-server`.
 
 ## Client configuration
 
-Copy this example to `/etc/pi-registrar/client/client.conf` and set the
+The package creates `/etc/pi-registrar/client/config.ini`; set the
 certificate file to a PEM containing both the certificate and private key:
 
 ```ini
