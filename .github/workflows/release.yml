@@ -38,6 +38,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends devscripts
           debchange \
+            --create \
+            --package pi-registrar-${{ matrix.package }} \
             --force-bad-version \
             --newversion "${{ needs.version.outputs.version }}-1" \
             --distribution unstable \
