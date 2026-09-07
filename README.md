@@ -45,6 +45,6 @@ The client timer runs the request periodically. Enable it with
 Build each package independently from its directory:
 
 ```sh
-cd server && dpkg-buildpackage -us -uc
-cd ../client && dpkg-buildpackage -us -uc
+cd server && dpkg-buildpackage -us -uc -b
+cd ../client && dpkg-buildpackage -us -uc -b
 ```
