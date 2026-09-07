@@ -3,6 +3,7 @@ known_ca: |
   REPLACE_WITH_CA_CERTIFICATE
   -----END CERTIFICATE-----
 database: /var/lib/pi-registrar/hostreg.db
+timezone: UTC
 dns:
   zone: example.org
   ttl: 300

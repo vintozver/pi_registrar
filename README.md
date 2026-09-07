@@ -14,6 +14,7 @@ known_ca: |
   REPLACE_WITH_CA_CERTIFICATE
   -----END CERTIFICATE-----
 database: /var/lib/pi-registrar/hostreg.db
+timezone: UTC
 dns:
   zone: example.org
   ttl: 300
@@ -22,6 +23,9 @@ dns:
     alg: hmac-sha256
     secret: replace-me
 ```
+
+Registration times are stored in UTC and displayed in the configured
+`timezone` (a `zoneinfo` name, `UTC` by default).
 
 The server service runs as the dedicated `pi-registrar` user and is disabled
 by default. Enable it with `systemctl enable --now pi-registrar-server`.
