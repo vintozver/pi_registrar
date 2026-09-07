@@ -7,4 +7,4 @@ User=pi-registrar
 Group=pi-registrar
 Type=simple
 EnvironmentFile=/etc/pi-registrar/client/config.ini
-ExecStart=/usr/bin/pi_registrar_client --endpoint ${ENDPOINT} --certificate ${CERTIFICATE} ${CLIENT_ARGS}
+ExecStart=/usr/bin/pi_registrar_client --endpoint ${ENDPOINT} --certificate ${CERTIFICATE} $CLIENT_ARGS
