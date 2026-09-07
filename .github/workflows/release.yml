@@ -52,6 +52,7 @@ jobs:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
           source-dir: ${{ matrix.package }}
+          artifacts-dir: ${{ matrix.package }}/debian/artifacts
           host-arch: ${{ matrix.arch }}
           buildpackage-opts: --build=binary --no-sign
 
