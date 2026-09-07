@@ -8,6 +8,10 @@ import urllib.parse
 import urllib.request
 
 import cryptography.hazmat.backends
+import cryptography.hazmat.primitives.hashes
+import cryptography.hazmat.primitives.asymmetric.ec
+import cryptography.hazmat.primitives.asymmetric.ed25519
+import cryptography.hazmat.primitives.asymmetric.rsa
 import cryptography.hazmat.primitives.serialization
 import cryptography.x509
 import jwt
@@ -46,6 +50,37 @@ class _HTTPSHandler(urllib.request.HTTPSHandler):
         )
 
 
+class _HTTPErrorProcessor(urllib.request.HTTPErrorProcessor):
+    def http_response(self, request, response):
+        return response
+
+    def https_response(self, request, response):
+        return response
+
+
+def get_jwt_alg_from_cert(certificate: cryptography.x509.Certificate) -> str:
+    pub_key = certificate.public_key()
+    hash_algo = certificate.signature_hash_algorithm
+
+    if isinstance(pub_key, cryptography.hazmat.primitives.asymmetric.rsa.RSAPublicKey):
+        if isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA256):
+            return "RS256"
+        elif isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA384):
+            return "RS384"
+        elif isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA512):
+            return "RS512"
+    elif isinstance(pub_key, cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey):
+        curve_name = pub_key.curve.name
+        if curve_name == "secp256r1" and isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA256):
+            return "ES256"
+        elif curve_name == "secp384r1" and isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA384):
+            return "ES384"
+    elif isinstance(pub_key, cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey):
+        return "EdDSA"
+
+    raise ValueError("Unsupported key type or hash algorithm")
+
+
 def _make_token(certificate_path):
     with open(certificate_path, "rb") as certificate_file:
         pem = certificate_file.read()
@@ -56,9 +91,13 @@ def _make_token(certificate_path):
         pem, None, backend=cryptography.hazmat.backends.default_backend()
     )
     token = jwt.encode(
-        {},
-        private_key,
-        algorithm="RS256",
+        payload={},
+        key=private_key.private_bytes(
+            encoding=cryptography.hazmat.primitives.serialization.Encoding.PEM,
+            format=cryptography.hazmat.primitives.serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=cryptography.hazmat.primitives.serialization.NoEncryption(),
+        ),
+        algorithm=get_jwt_alg_from_cert(certificate),
         headers={
             "dt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
             "x5c": [
@@ -84,7 +123,7 @@ def run(argv=None):
         endpoint, method="POST", headers={"Authorization": "Bearer " + token}
     )
     context = ssl.create_default_context()
-    opener = urllib.request.build_opener(_HTTPSHandler(address, context))
+    opener = urllib.request.build_opener(_HTTPSHandler(address, context), _HTTPErrorProcessor())
     with opener.open(request) as response:
         return response.read().decode()
 
