@@ -116,15 +116,9 @@ def _make_token(certificate_path):
     return token
 
 
-def run(argv=None):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--endpoint", required=True)
-    parser.add_argument("--ipv4", action="store_true")
-    parser.add_argument("--ipv6", action="store_true")
-    parser.add_argument("--certificate", required=True)
-    args = parser.parse_args(argv)
-    endpoint, address = _resolve(args.endpoint, args.ipv4)
-    token = _make_token(args.certificate)
+def _register(endpoint, certificate, ipv4):
+    endpoint, address = _resolve(endpoint, ipv4)
+    token = _make_token(certificate)
     request = urllib.request.Request(
         endpoint, method="POST", headers={"Authorization": "Bearer " + token}
     )
@@ -132,6 +126,21 @@ def run(argv=None):
     opener = urllib.request.build_opener(_HTTPSHandler(address, context), _HTTPErrorProcessor())
     with opener.open(request) as response:
         return response.read().decode()
+
+
+def run(argv=None):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--endpoint", required=True)
+    parser.add_argument("--ipv4", action="store_true")
+    parser.add_argument("--ipv6", action="store_true")
+    parser.add_argument("--certificate", required=True)
+    args = parser.parse_args(argv)
+    protocols = []
+    if args.ipv4:
+        protocols.append(True)
+    if args.ipv6 or not protocols:
+        protocols.append(False)
+    return "\n".join(_register(args.endpoint, args.certificate, ipv4) for ipv4 in protocols)
 
 
 def main():
