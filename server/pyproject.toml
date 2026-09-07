@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "pi_registrar.server"
 version = "1.0.0"
 description = "pi_registrar address registration server"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "cherrypy",
     "cryptography>=49.0.0",

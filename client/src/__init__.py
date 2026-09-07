@@ -1,5 +1,6 @@
 import argparse
 import base64
+import datetime
 import socket
 import ssl
 import http.client
@@ -59,6 +60,7 @@ def _make_token(certificate_path):
         private_key,
         algorithm="RS256",
         headers={
+            "dt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
             "x5c": [
                 base64.b64encode(
                     certificate.public_bytes(cryptography.hazmat.primitives.serialization.Encoding.DER)

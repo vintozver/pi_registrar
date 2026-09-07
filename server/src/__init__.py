@@ -6,6 +6,8 @@ import logging
 import os
 import sqlite3
 import typing
+import urllib.parse
+import zoneinfo
 
 import cherrypy
 import cryptography.hazmat.backends
@@ -33,6 +35,7 @@ class Store:
         self.dns_ttl = 0
         self.dns_keyring = None
         self.known_ca = None
+        self.timezone = datetime.timezone.utc
         try:
             with open(self.CONFIG_FILE, "rt", encoding="utf-8") as config_file:
                 config = yaml.safe_load(config_file) or {}
@@ -40,6 +43,12 @@ class Store:
             logging.warning("Config read failed: %s", err)
             config = {}
         self.db = config.get("database", "hostreg.db")
+
+        timezone = config.get("timezone", "UTC")
+        try:
+            self.timezone = zoneinfo.ZoneInfo(timezone)
+        except (ValueError, zoneinfo.ZoneInfoNotFoundError):
+            logging.warning("timezone %s is not a valid timezone name", timezone)
 
         known_ca = config.get("known_ca")
         if known_ca:
@@ -80,10 +89,30 @@ class Store:
                 (ip_addr.version, cert, str(ip_addr), dt),
             )
 
+    def format_dt(self, value) -> str:
+        if not isinstance(value, datetime.datetime):
+            try:
+                value = datetime.datetime.fromisoformat(str(value))
+            except ValueError:
+                return str(value)
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=datetime.timezone.utc)
+        return value.astimezone(self.timezone).strftime("%Y-%m-%d %H:%M:%S")
+
     def read(self):
         with sqlite3.connect(self.db) as db_connection:
             for row in db_connection.execute("SELECT ver, cert, address, dt FROM maps ORDER BY dt DESC"):
-                yield tuple(map(str, row))
+                yield str(row[0]), str(row[1]), str(row[2]), self.format_dt(row[3])
+
+
+def _verify_dt(value):
+    try:
+        dt = datetime.datetime.strptime(value, "%Y%m%dT%H%M%SZ").replace(tzinfo=datetime.timezone.utc)
+    except (TypeError, ValueError):
+        raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Invalid dt claim")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if abs(now - dt) > datetime.timedelta(minutes=1):
+        raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Invalid dt claim")
 
 
 def _certificate_from_x5c(value: str):
@@ -160,6 +189,7 @@ class Root:
         token = authorization[7:]
         try:
             header = jwt.get_unverified_header(token)
+            _verify_dt(header.get("dt"))
             certificate = _certificate_from_x5c(header["x5c"][0])
             if not _verify_certificate(certificate, _store.known_ca):
                 raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Certificate is not trusted")
@@ -180,7 +210,9 @@ class Root:
             return self._map(
                 self._request_ip(),
                 cryptography.x509.load_pem_x509_certificate(
-                    cherrypy.request.headers["X-SSL-Client-Certificate"].encode("ascii"),
+                    urllib.parse.unquote(
+                        cherrypy.request.headers["X-SSL-Client-Certificate"]
+                    ).encode("ascii"),
                     cryptography.hazmat.backends.default_backend(),
                 ).subject.get_attributes_for_oid(cryptography.x509.oid.NameOID.COMMON_NAME)[0].value,
             )
