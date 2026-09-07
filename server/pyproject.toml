@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pi_registrar"
+name = "pi_registrar.server"
 version = "1.0.0"
-description = "Registrar server and client for dynamic host addresses"
+description = "pi_registrar address registration server"
 requires-python = ">=3.8"
 dependencies = [
     "cherrypy",
@@ -17,11 +17,8 @@ dependencies = [
 ]
 
 [project.scripts]
-pi_registrar_server = "server:run"
-pi_registrar_client = "client:main"
-
-[tool.setuptools.packages.find]
-where = ["src"]
+pi_registrar_server = "pi_registrar.server:run"
 
 [tool.setuptools]
-py-modules = ["server", "client"]
+packages = ["pi_registrar.server"]
+package-dir."pi_registrar.server" = "src"

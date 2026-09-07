@@ -42,8 +42,9 @@ The client timer runs the request periodically. Enable it with
 
 ## Debian packages
 
-Build both packages with:
+Build each package independently from its directory:
 
 ```sh
-dpkg-buildpackage -us -uc
+cd server && dpkg-buildpackage -us -uc
+cd ../client && dpkg-buildpackage -us -uc
 ```

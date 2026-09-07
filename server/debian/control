@@ -1,8 +1,8 @@
-Source: pi-registrar
+Source: pi-registrar-server
 Section: net
 Priority: optional
 Maintainer: Vitaly Greck <vintozver@ya.ru>
-Build-Depends: debhelper (>= 13), dh-python, python3-all, python3-setuptools, python3-venv
+Build-Depends: debhelper (>= 13), dh-python, python3-all, python3-setuptools
 Standards-Version: 4.6.0
 
 Package: pi-registrar-server
@@ -10,9 +10,3 @@ Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, python3-cherrypy, python3-cryptography, python3-dnspython, python3-jwt, python3-yaml, python3-dateutil
 Description: server for registering host addresses
  The pi registrar server accepts authenticated host address registrations.
-
-Package: pi-registrar-client
-Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, python3-cryptography, python3-jwt
-Description: client for registering host addresses
- The pi registrar client signs and sends authenticated registrations.

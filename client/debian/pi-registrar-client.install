@@ -1,4 +1,4 @@
 usr/bin/pi_registrar_client
-usr/lib/python3/dist-packages/client.py
+usr/lib/python3/dist-packages/pi_registrar/client/__init__.py
 debian/pi-registrar-client.service lib/systemd/system/
 debian/pi-registrar-client.timer lib/systemd/system/
