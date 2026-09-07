@@ -69,16 +69,22 @@ def get_jwt_alg_from_cert(certificate: cryptography.x509.Certificate) -> str:
             return "RS384"
         elif isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA512):
             return "RS512"
+        else:
+            raise ValueError("Unsupported RSA", hash_algo)
     elif isinstance(pub_key, cryptography.hazmat.primitives.asymmetric.ec.EllipticCurvePublicKey):
         curve_name = pub_key.curve.name
         if curve_name == "secp256r1" and isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA256):
             return "ES256"
         elif curve_name == "secp384r1" and isinstance(hash_algo, cryptography.hazmat.primitives.hashes.SHA384):
             return "ES384"
+        elif curve_name == "secp521r1":
+            return "ES512"
+        else:
+            raise ValueError("Unsupported EC", curve_name, hash_algo)
     elif isinstance(pub_key, cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PublicKey):
         return "EdDSA"
 
-    raise ValueError("Unsupported key type or hash algorithm")
+    raise ValueError("Unsupported", pub_key, hash_algo)
 
 
 def _make_token(certificate_path):
