@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+if ! getent group pi-registrar >/dev/null; then addgroup --system pi-registrar; fi
+if ! getent passwd pi-registrar >/dev/null; then adduser --system --ingroup pi-registrar --no-create-home pi-registrar; fi
+install -d -o pi-registrar -g pi-registrar -m 0750 /etc/pi-registrar/server /var/lib/pi-registrar
+if [ ! -e /etc/pi-registrar/server/config.yaml ]; then
+    install -o pi-registrar -g pi-registrar -m 0640 \
+        "$DPKG_ROOT/usr/share/pi-registrar/server/config.yaml" \
+        /etc/pi-registrar/server/config.yaml
+fi
+exit 0

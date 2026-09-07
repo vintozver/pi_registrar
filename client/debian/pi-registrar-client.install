@@ -1,0 +1,2 @@
+debian/pi-registrar-client.service lib/systemd/system/
+debian/pi-registrar-client.timer lib/systemd/system/

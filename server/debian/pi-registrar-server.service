@@ -1,0 +1,14 @@
+[Unit]
+Description=pi registrar server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=pi-registrar
+Group=pi-registrar
+Environment=CONFIG_FILE=/etc/pi-registrar/server/config.yaml
+ExecStart=/usr/bin/pi_registrar_server
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
