@@ -1,0 +1,62 @@
+name: Release Debian Packages
+
+on:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Compute version
+        id: version
+        run: echo "version=0+github$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [client, server]
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate changelog entry
+        env:
+          DEBFULLNAME: GitHub Actions
+          DEBEMAIL: actions@github.com
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends devscripts
+          debchange \
+            --force-bad-version \
+            --newversion "${{ needs.version.outputs.version }}-1" \
+            --distribution unstable \
+            --controlmaint \
+            --changelog "${{ matrix.package }}/debian/changelog" \
+            "Automated release build from ${{ github.sha }}"
+
+      - name: Build ${{ matrix.package }} package (${{ matrix.arch }})
+        uses: jtdor/build-deb-action@v1
+        env:
+          DEB_BUILD_OPTIONS: noautodbgsym
+        with:
+          source-dir: ${{ matrix.package }}
+          host-arch: ${{ matrix.arch }}
+          buildpackage-opts: --build=binary --no-sign
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-registrar-${{ matrix.package }}-${{ matrix.arch }}-${{ needs.version.outputs.version }}
+          path: ${{ matrix.package }}/debian/artifacts/
+          if-no-files-found: error
