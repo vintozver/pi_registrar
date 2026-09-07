@@ -25,7 +25,6 @@ jobs:
       fail-fast: false
       matrix:
         package: [client, server]
-        arch: [amd64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,18 +45,17 @@ jobs:
             --changelog debian/changelog \
             "Automated release build from ${{ github.sha }}"
 
-      - name: Build ${{ matrix.package }} package (${{ matrix.arch }})
+      - name: Build ${{ matrix.package }} package
         uses: jtdor/build-deb-action@v1
         env:
           DEB_BUILD_OPTIONS: noautodbgsym
         with:
           source-dir: ${{ matrix.package }}
-          host-arch: ${{ matrix.arch }}
           buildpackage-opts: --build=binary --no-sign
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pi-registrar-${{ matrix.package }}-${{ matrix.arch }}-${{ needs.version.outputs.version }}
-          path: ${{ matrix.package }}/debian/artifacts/
+          name: pi-registrar-${{ matrix.package }}-${{ needs.version.outputs.version }}
+          path: debian/artifacts/
           if-no-files-found: error
