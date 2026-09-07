@@ -1,10 +1,10 @@
 [Unit]
 Description=pi registrar client update
+ConditionPathExists=/etc/pi-registrar/client/config.ini
 
 [Service]
 User=pi-registrar
 Group=pi-registrar
 Type=simple
-ConditionPathExists=/etc/pi-registrar/client/config.ini
 EnvironmentFile=/etc/pi-registrar/client/config.ini
 ExecStart=/usr/bin/pi_registrar_client --endpoint ${ENDPOINT} --certificate ${CERTIFICATE} ${CLIENT_ARGS}
