@@ -1,13 +1,16 @@
 import unittest
 from unittest.mock import MagicMock, Mock, call, patch
 
-from src import run
+from pi_registrar.client import run
 
 
 class RunTests(unittest.TestCase):
-    @patch("src.urllib.request.build_opener")
-    @patch("src._make_token", return_value="token")
-    @patch("src._resolve", side_effect=[("https://server", "192.0.2.1"), ("https://server", "2001:db8::1")])
+    @patch("pi_registrar.client.urllib.request.build_opener")
+    @patch("pi_registrar.client._make_token", return_value="token")
+    @patch(
+        "pi_registrar.client._resolve",
+        side_effect=[("https://server", "192.0.2.1"), ("https://server", "2001:db8::1")],
+    )
     def test_registers_each_selected_protocol(self, resolve, make_token, build_opener):
         first_response = Mock()
         first_response.read.return_value = b"ipv4"
@@ -36,7 +39,7 @@ class RunTests(unittest.TestCase):
         self.assertEqual(first_opener.open.call_count, 1)
         self.assertEqual(second_opener.open.call_count, 1)
 
-    @patch("src._register", return_value="registered")
+    @patch("pi_registrar.client._register", return_value="registered")
     def test_selects_requested_protocols(self, register):
         cases = [
             ([], [False]),
