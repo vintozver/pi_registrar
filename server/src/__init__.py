@@ -189,7 +189,7 @@ class Root:
         token = authorization[7:]
         try:
             header = jwt.get_unverified_header(token)
-            _verify_dt(header["dt"])
+            _verify_dt(header.get("dt"))
             certificate = _certificate_from_x5c(header["x5c"][0])
             if not _verify_certificate(certificate, _store.known_ca):
                 raise cherrypy.HTTPError(http.HTTPStatus.UNAUTHORIZED.value, "Certificate is not trusted")
