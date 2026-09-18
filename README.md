@@ -52,3 +52,15 @@ Build each package independently from its directory:
 cd server && dpkg-buildpackage -us -uc -b
 cd ../client && dpkg-buildpackage -us -uc -b
 ```
+
+## Arch Linux packages
+
+The Arch packages build from the commit selected by `_commit` in each
+`PKGBUILD`:
+
+```sh
+cd server/arch && makepkg --syncdeps
+cd ../../client/arch && makepkg --syncdeps
+```
+
+Automated releases publish both `.deb` and `.pkg.tar.zst` files.

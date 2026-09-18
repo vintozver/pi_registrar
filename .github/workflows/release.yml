@@ -1,4 +1,4 @@
-name: Release Debian Packages
+name: Release Packages
 
 on:
   push:
@@ -62,10 +62,48 @@ jobs:
           path: debian/artifacts/
           if-no-files-found: error
 
+  build-arch:
+    needs: version
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [client, server]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git python python-build python-cherrypy python-cryptography \
+            python-dateutil python-dnspython python-installer python-pyjwt \
+            python-setuptools python-wheel python-yaml
+
+      - name: Build ${{ matrix.package }} package
+        working-directory: ${{ matrix.package }}/arch
+        env:
+          PACKAGE_VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${PACKAGE_VERSION}/" PKGBUILD
+          sed -i "s/^_commit=.*/_commit=${GITHUB_SHA}/" PKGBUILD
+          useradd --create-home builder
+          chown -R builder .
+          runuser -u builder -- makepkg --cleanbuild --clean --noconfirm
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-registrar-${{ matrix.package }}-arch-${{ needs.version.outputs.version }}
+          path: ${{ matrix.package }}/arch/*.pkg.tar.zst
+          if-no-files-found: error
+
   publish:
     needs:
       - version
       - build
+      - build-arch
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -82,17 +120,17 @@ jobs:
       - name: Publish release assets
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG_NAME: debian-${{ needs.version.outputs.version }}
-          RELEASE_TITLE: Debian packages ${{ needs.version.outputs.version }}
+          TAG_NAME: packages-${{ needs.version.outputs.version }}
+          RELEASE_TITLE: Packages ${{ needs.version.outputs.version }}
         run: |
           shopt -s globstar nullglob
-          debs=(dist/**/*.deb)
-          if [ "${#debs[@]}" -eq 0 ]; then
-            echo "No Debian packages were downloaded." >&2
+          packages=(dist/**/*.deb dist/**/*.pkg.tar.zst)
+          if [ "${#packages[@]}" -eq 0 ]; then
+            echo "No packages were downloaded." >&2
             exit 1
           fi
 
-          gh release create "$TAG_NAME" "${debs[@]}" \
+          gh release create "$TAG_NAME" "${packages[@]}" \
             --target "$GITHUB_SHA" \
             --title "$RELEASE_TITLE" \
-            --notes "Automated Debian package release for $GITHUB_SHA."
+            --notes "Automated Debian and Arch Linux package release for $GITHUB_SHA."

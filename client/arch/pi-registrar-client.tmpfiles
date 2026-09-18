@@ -1,0 +1,2 @@
+d /etc/pi-registrar/client 0750 pi-registrar pi-registrar -
+z /etc/pi-registrar/client/config.ini 0640 pi-registrar pi-registrar -
