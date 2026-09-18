@@ -18,7 +18,7 @@ jobs:
         id: version
         run: echo "version=0+github$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
 
-  build-dep:
+  build-deb:
     needs: version
     runs-on: ubuntu-latest
     strategy:
@@ -102,7 +102,7 @@ jobs:
   publish:
     needs:
       - version
-      - build-dep
+      - build-deb
       - build-arch
     runs-on: ubuntu-latest
     permissions:
