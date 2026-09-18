@@ -1,0 +1,3 @@
+d /etc/pi-registrar/server 0750 pi-registrar pi-registrar -
+z /etc/pi-registrar/server/config.yaml 0640 pi-registrar pi-registrar -
+d /var/lib/pi-registrar 0750 pi-registrar pi-registrar -

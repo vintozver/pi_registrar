@@ -1,0 +1,35 @@
+pkgname=pi-registrar-client
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Client for registering host addresses"
+arch=('any')
+url="https://github.com/vintozver/pi_registrar"
+license=('unknown')
+depends=('python' 'python-cryptography' 'python-pyjwt')
+makedepends=('git' 'python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+backup=('etc/pi-registrar/client/config.ini')
+
+_commit=master
+source=("pi_registrar::git+${url}.git#commit=${_commit}")
+sha256sums=('SKIP')
+
+build() {
+    cd "$srcdir/pi_registrar/client"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "$srcdir/pi_registrar/client"
+
+    python -m installer --destdir="$pkgdir" dist/*.whl
+    install -Dm644 debian/pi-registrar-client.service \
+        "$pkgdir/usr/lib/systemd/system/pi-registrar-client.service"
+    install -Dm644 debian/pi-registrar-client.timer \
+        "$pkgdir/usr/lib/systemd/system/pi-registrar-client.timer"
+    install -Dm640 debian/client-config.ini \
+        "$pkgdir/etc/pi-registrar/client/config.ini"
+    install -Dm644 arch/pi-registrar-client.sysusers \
+        "$pkgdir/usr/lib/sysusers.d/pi-registrar-client.conf"
+    install -Dm644 arch/pi-registrar-client.tmpfiles \
+        "$pkgdir/usr/lib/tmpfiles.d/pi-registrar-client.conf"
+}
